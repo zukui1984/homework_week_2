@@ -1,0 +1,39 @@
+import pyarrow as pa
+import pyarrow.parquet as pq
+import pandas as pd
+import os
+
+if 'data_exporter' not in globals():
+    from mage_ai.data_preparation.decorators import data_exporter
+
+# Set the Google Cloud Storage credentials file path
+os.environ['GOOGLE_APPLICATIONS_CREDENTIALS'] = "/home/src/dtc-dez-412015-4847bcfba3bd.json"
+
+# GCS bucket, project ID, and table name
+bucket_name = 'mage_zoomcamp_zukui'
+project_id = 'dtc-dez-412015'
+object_key = 'green_taxi.parquet'
+table_name = 'green_taxi'
+
+# Corrected root path in GCS with 'gs://' prefix
+root_path = f'{bucket_name}/{table_name}'
+
+# Data exporter function decorated with @data_exporter
+@data_exporter
+def taxi_gcs_partitioned_parquet(data, *args, **kwargs):
+    data['lpep_pickup_datetime'] = pd.to_datetime(data['lpep_pickup_datetime'])
+    data['lpep_pickup_date'] = data['lpep_pickup_datetime'].dt.date
+
+    # Convert the pandas DataFrame to a PyArrow Table
+    table = pa.Table.from_pandas(data)
+
+    # Create a GCS filesystem
+    gcs = pa.fs.GcsFileSystem(project_id=project_id)
+
+    # Write the table to the GCS dataset, partitioned by 'lpep_pickup_date'
+    pq.write_to_dataset(
+        table,
+        root_path=root_path,
+        partition_cols=['lpep_pickup_date'],
+        filesystem=gcs
+    )
